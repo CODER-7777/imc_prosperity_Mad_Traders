@@ -1,3 +1,15 @@
+"""
+Round 4 Trader — IMC Prosperity (V4 ULTRA)
+============================================
+Based on 537998 (47k PnL) — the proven winner.
+
+Changes from V3 (45.5k):
+  1. REMOVE counterparty logic on HP/VF — it HURT performance (-1.6k)
+  2. STOP trading VF entirely — it bleeds -10.7k and we can't hedge it
+  3. Focus 100% on VEVs (the profit engine: +56k gross)
+  4. Keep HP simple (original 537998 logic that made +2k)
+"""
+
 from datamodel import OrderDepth, UserId, TradingState, Order
 from typing import List, Dict, Any
 import jsonpickle

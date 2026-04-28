@@ -3,7 +3,6 @@ from typing import List, Dict, Any
 import jsonpickle
 import math
 
-
 class Trader:
 
     POS_LIMITS = {
@@ -18,11 +17,15 @@ class Trader:
         "VEV_5400": 5400, "VEV_5500": 5500, "VEV_6000": 6000, "VEV_6500": 6500
     }
 
-    # From data analysis: Mark 38 = bad trader on HP
-    BAD_TRADER_HP = "Mark 38"
+    # From data analysis: Mark 38 = bad trader on HP, Mark 55 = bad trader on VF
+    # They buy ABOVE mid and sell BELOW mid → we fade them
+    BAD_TRADER_HP  = "Mark 38"
+    BAD_TRADER_VF  = "Mark 55"
 
+    # Calibrated from data: σ ≈ 0.17 annualized for VELVETFRUIT
     VEV_SIGMA = 0.17
     TRADING_DAYS = 252
+    # Round 4: VEV TTE starts at 4 days (from wiki: "VEV_5000 has TTE 4 days in round 4")
     VEV_TTE_START = 4
 
     def norm_cdf(self, x: float) -> float:
@@ -57,11 +60,17 @@ class Trader:
 
     def make_orders(self, product, od, fair, pos, limit, bid_skew=0, ask_skew=0,
                     spread=3, aggress_buy=None, aggress_sell=None):
+        """
+        Standard market-making + optional aggressive orders.
+        bid_skew / ask_skew: positive = more willing to buy/sell.
+        aggress_buy: price at which to hit existing asks aggressively.
+        aggress_sell: price at which to hit existing bids aggressively.
+        """
         orders = []
         max_buy  = limit - pos
         max_sell = limit + pos
 
-        # Aggressive orders first
+        # Aggressive orders first (take liquidity from bad traders)
         if aggress_buy and max_buy > 0:
             for ask_px, ask_vol in sorted(od.sell_orders.items()):
                 if ask_px <= aggress_buy and max_buy > 0:
@@ -76,7 +85,7 @@ class Trader:
                     orders.append(Order(product, bid_px, -qty))
                     max_sell -= qty
 
-        # Passive market-making with full remaining capacity
+        # Passive market-making
         our_bid = round(fair - spread + bid_skew)
         our_ask = round(fair + spread + ask_skew)
 
@@ -121,34 +130,41 @@ class Trader:
                 vf_ema = alpha * mid + (1 - alpha) * vf_ema
 
         # ── VEV time to expiry ────────────────────────────────────────────────
+        # TTE starts at 4 on day 1, decreases by 1 per day
+        # Intra-day: subtract fraction of day elapsed
         day_fraction = state.timestamp / 1_000_000
         tte_days = max(0.05, self.VEV_TTE_START - (day - 1) - day_fraction)
 
         # ═══════════════════════════════════════════════════════════════════════
-        # 1. HYDROGEL_PACK — proven 537998 logic (no Mark 14, just Mark 38)
+        # 1. HYDROGEL_PACK
         # ═══════════════════════════════════════════════════════════════════════
         if "HYDROGEL_PACK" in state.order_depths:
             od   = state.order_depths["HYDROGEL_PACK"]
             pos  = state.position.get("HYDROGEL_PACK", 0)
             lim  = self.POS_LIMITS["HYDROGEL_PACK"]
 
-            fair = hp_ema
+            fair = hp_ema  # EMA tracks fair value
 
+            # Mark 38 signal: bad trader who buys high / sells low
             net38 = self.bad_trader_net("HYDROGEL_PACK", state.market_trades, self.BAD_TRADER_HP)
 
+            # Mark 38 bought → price pushed up → sell aggressively
+            # Mark 38 sold  → price pushed down → buy aggressively
             aggress_buy_px  = None
             aggress_sell_px = None
             bid_skew = 0
             ask_skew = 0
 
             if net38 < 0:
+                # Mark 38 sold below fair → buy from him / lean long
                 aggress_buy_px = round(fair - 4)
                 bid_skew = 3
             elif net38 > 0:
+                # Mark 38 bought above fair → sell to him / lean short
                 aggress_sell_px = round(fair + 4)
                 ask_skew = -3
 
-            # Inventory skew
+            # Inventory skew: reduce risk near limits
             inv_skew = -int(pos * 0.05)
             bid_skew += inv_skew
             ask_skew += inv_skew
@@ -163,17 +179,49 @@ class Trader:
             result["HYDROGEL_PACK"] = orders
 
         # ═══════════════════════════════════════════════════════════════════════
-        # 2. VELVETFRUIT_EXTRACT — DON'T trade actively, only update EMA
-        #    VF is used ONLY as the underlying for VEV BS pricing
-        #    Trading VF loses ~10k in hedge drag — not worth it
+        # 2. VELVETFRUIT_EXTRACT
         # ═══════════════════════════════════════════════════════════════════════
-        # (EMA already updated above — no orders placed for VF)
+        if "VELVETFRUIT_EXTRACT" in state.order_depths:
+            od   = state.order_depths["VELVETFRUIT_EXTRACT"]
+            pos  = state.position.get("VELVETFRUIT_EXTRACT", 0)
+            lim  = self.POS_LIMITS["VELVETFRUIT_EXTRACT"]
+
+            fair = vf_ema
+
+            # Mark 55 signal: bad trader on VELVETFRUIT
+            net55 = self.bad_trader_net("VELVETFRUIT_EXTRACT", state.market_trades, self.BAD_TRADER_VF)
+
+            aggress_buy_px  = None
+            aggress_sell_px = None
+            bid_skew = 0
+            ask_skew = 0
+
+            if net55 < 0:
+                # Mark 55 sold below fair → buy
+                aggress_buy_px = round(fair - 1)
+                bid_skew = 2
+            elif net55 > 0:
+                # Mark 55 bought above fair → sell
+                aggress_sell_px = round(fair + 1)
+                ask_skew = -2
+
+            inv_skew = -int(pos * 0.03)
+            bid_skew += inv_skew
+            ask_skew += inv_skew
+
+            orders = self.make_orders(
+                "VELVETFRUIT_EXTRACT", od, fair, pos, lim,
+                bid_skew=bid_skew, ask_skew=ask_skew,
+                spread=2,
+                aggress_buy=aggress_buy_px,
+                aggress_sell=aggress_sell_px
+            )
+            result["VELVETFRUIT_EXTRACT"] = orders
 
         # ═══════════════════════════════════════════════════════════════════════
-        # 3. VEV Options — THE PROFIT ENGINE
-        #    BS pricing + FULL CAPACITY passive quotes
+        # 3. VEV Options (Black-Scholes pricing)
         # ═══════════════════════════════════════════════════════════════════════
-        vf_price = vf_ema
+        vf_price = vf_ema  # use our EMA as underlying price
 
         for vev, strike in self.VEV_STRIKES.items():
             if vev not in state.order_depths:
@@ -189,21 +237,21 @@ class Trader:
             max_buy  = lim - pos
             max_sell = lim + pos
 
-            # Aggressive: sweep ALL underpriced asks
+            # Hit underpriced asks
             for ask_px, ask_vol in sorted(od.sell_orders.items()):
                 if ask_px < fair - 1 and max_buy > 0:
                     qty = min(max_buy, -ask_vol)
                     orders.append(Order(vev, ask_px, qty))
                     max_buy -= qty
 
-            # Aggressive: hit ALL overpriced bids
+            # Hit overpriced bids
             for bid_px, bid_vol in sorted(od.buy_orders.items(), reverse=True):
                 if bid_px > fair + 1 and max_sell > 0:
                     qty = min(max_sell, bid_vol)
                     orders.append(Order(vev, bid_px, -qty))
                     max_sell -= qty
 
-            # PASSIVE: put ENTIRE remaining capacity at ±1 from BS fair
+            # Passive quotes around BS fair value
             if max_buy > 0 and fair > 0.5:
                 orders.append(Order(vev, math.floor(fair - 1), max_buy))
             if max_sell > 0 and fair > 0.5:

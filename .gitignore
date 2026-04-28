@@ -1,17 +1,12 @@
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
+*.pyo
 *.egg-info/
 dist/
 build/
 .eggs/
 *.egg
-
-# Virtual environments
-venv/
-.env/
-.venv/
 
 # IDE
 .vscode/
@@ -25,11 +20,16 @@ venv/
 Thumbs.db
 desktop.ini
 
-# Logs & Submissions (large binary files)
-logs/*.zip
-logs/*.json
-logs/*.log
-*.zip
+# Submission logs (large JSON/log files, keep zips for reference)
+round*/Logs/*/
+round*/logs/*/
+!round*/Logs/*.zip
+!round*/logs/*.zip
 
-# Jupyter
-.ipynb_checkpoints/
+# Analysis scripts and output (development artifacts, not production code)
+round*/analysis/
+
+# Temporary
+*.tmp
+pdf_dump.txt
+fix_repo.ps1

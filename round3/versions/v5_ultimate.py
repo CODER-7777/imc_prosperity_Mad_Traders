@@ -182,66 +182,118 @@ class Trader:
 
         return orders
 
-    # ===== OPTION SNIPING (No Market Making to prevent adverse selection) =====
-    def trade_option_snipe(self, om: OrderManager, od: OrderDepth, strike: int,
-                           ve_price: float, T_years: float, sigma: float):
+    # ===== STRATEGY: Deep ITM option MM =====
+    def trade_deep_itm(self, om: OrderManager, od: OrderDepth, strike: int,
+                       ve_price: float, T_years: float, sigma: float):
+        bb, ba = self.get_best(od)
+        if bb is None or ba is None:
+            return
+
         fv = self.bs_call(ve_price, float(strike), T_years, sigma)
         fv = max(fv, max(0.0, ve_price - strike))
-        edge = max(2.0, fv * 0.05)
+        edge = max(2.0, fv * 0.005)
 
-        # 1. Take mispriced orders
         for ask_p in sorted(od.sell_orders.keys()):
             if ask_p < fv - edge:
-                take_qty = min(-od.sell_orders[ask_p], om.limit - (om.pos + om.buy_vol))
+                om.add_buy(ask_p, -od.sell_orders[ask_p])
+
+        for bid_p in sorted(od.buy_orders.keys(), reverse=True):
+            if bid_p > fv + edge:
+                om.add_sell(bid_p, -od.buy_orders[bid_p])
+
+        virtual_pos = om.pos + om.buy_vol + om.sell_vol
+        inv_ratio = virtual_pos / om.limit if om.limit > 0 else 0
+        skew = -int(inv_ratio * 3)
+        fv_int = int(round(fv))
+
+        my_bid = max(0, min(fv_int - 2 + skew, bb + 1))
+        my_ask = max(1, max(fv_int + 2 + skew, ba - 1))
+
+        om.add_buy(my_bid, 20)
+        om.add_sell(my_ask, -20)
+
+    # ===== STRATEGY: Near-ATM Sniping + AGGRESSIVE EXIT =====
+    def trade_atm_snipe(self, om: OrderManager, od: OrderDepth, strike: int,
+                        ve_price: float, T_years: float, sigma: float):
+        bb, ba = self.get_best(od)
+        if bb is None or ba is None:
+            return
+
+        fv = self.bs_call(ve_price, float(strike), T_years, sigma)
+        fv = max(fv, max(0.0, ve_price - strike))
+        edge = max(3.0, fv * 0.05)
+
+        # 1. AGGRESSIVE THETA EXIT: Just offer/bid at exactly fair value.
+        # This will auto-match and take liquidity if bb/ba crosses fv!
+        if om.pos > 0:
+            om.add_sell(int(round(fv)), -om.pos)
+        elif om.pos < 0:
+            om.add_buy(int(round(fv)), -om.pos)
+
+        # 2. Snipe massive mispricings
+        for ask_p in sorted(od.sell_orders.keys()):
+            if ask_p < fv - edge:
+                virtual_pos = om.pos + om.buy_vol + om.sell_vol
+                room = max(0, 100 - virtual_pos)
+                take_qty = min(-od.sell_orders[ask_p], room)
                 if take_qty > 0:
                     om.add_buy(ask_p, take_qty)
 
         for bid_p in sorted(od.buy_orders.keys(), reverse=True):
             if bid_p > fv + edge:
-                take_qty = min(od.buy_orders[bid_p], om.pos + om.sell_vol + om.limit)
+                virtual_pos = om.pos + om.buy_vol + om.sell_vol
+                room = max(0, virtual_pos + 100)
+                take_qty = min(od.buy_orders[bid_p], room)
                 if take_qty > 0:
                     om.add_sell(bid_p, -take_qty)
 
-    # ===== DELTA HEDGING =====
-    def calc_portfolio_delta(self, state: TradingState, ve_price: float,
-                             T_years: float, sigmas: Dict[str, float]) -> float:
-        """Calculate total portfolio delta from all option positions."""
-        total_delta = 0.0
-        for product, pos in state.position.items():
-            if product in self.VEV_STRIKES and pos != 0:
-                strike = self.VEV_STRIKES[product]
-                sigma = sigmas.get(product, 0.18)
-                d = self.bs_delta(ve_price, float(strike), T_years, sigma)
-                total_delta += pos * d
-        # Add VE position directly (delta = 1)
-        total_delta += state.position.get("VELVETFRUIT_EXTRACT", 0)
-        return total_delta
-
-    def delta_hedge_orders(self, od: OrderDepth, ve_pos: int,
-                           target_ve_trade: int, limit: int) -> List[Order]:
-        """Generate VE orders to hedge portfolio delta."""
-        orders: List[Order] = []
-        if target_ve_trade == 0:
-            return orders
-
+    # ===== STRATEGY: Moderate ITM =====
+    def trade_mod_itm(self, om: OrderManager, od: OrderDepth, strike: int,
+                      ve_price: float, T_years: float, sigma: float):
         bb, ba = self.get_best(od)
         if bb is None or ba is None:
-            return orders
+            return
 
-        if target_ve_trade > 0:
-            # Need to BUY VE
-            buy_room = limit - ve_pos
-            qty = min(target_ve_trade, buy_room)
-            if qty > 0:
-                orders.append(Order("VELVETFRUIT_EXTRACT", ba, qty))
-        elif target_ve_trade < 0:
-            # Need to SELL VE
-            sell_room = ve_pos + limit
-            qty = min(-target_ve_trade, sell_room)
-            if qty > 0:
-                orders.append(Order("VELVETFRUIT_EXTRACT", bb, -qty))
+        fv = self.bs_call(ve_price, float(strike), T_years, sigma)
+        fv = max(fv, max(0.0, ve_price - strike))
+        edge = max(2.0, fv * 0.02)
 
-        return orders
+        # Aggressive exit here too
+        if om.pos > 0:
+            om.add_sell(int(round(fv)), -om.pos)
+        elif om.pos < 0:
+            om.add_buy(int(round(fv)), -om.pos)
+
+        for ask_p in sorted(od.sell_orders.keys()):
+            if ask_p < fv - edge:
+                om.add_buy(ask_p, -od.sell_orders[ask_p])
+
+        for bid_p in sorted(od.buy_orders.keys(), reverse=True):
+            if bid_p > fv + edge:
+                om.add_sell(bid_p, -od.buy_orders[bid_p])
+
+        virtual_pos = om.pos + om.buy_vol + om.sell_vol
+        inv_ratio = virtual_pos / om.limit if om.limit > 0 else 0
+        skew = -int(inv_ratio * 3)
+        fv_int = int(round(fv))
+
+        my_bid = max(0, min(fv_int - 3 + skew, bb + 1))
+        my_ask = max(1, max(fv_int + 3 + skew, ba - 1))
+
+        om.add_buy(my_bid, 10)
+        om.add_sell(my_ask, -10)
+
+    # ===== DELTA HEDGING =====
+    def calc_portfolio_delta(self, state: TradingState, ve_price: float,
+                             T_years: float, sigma: float) -> float:
+        total_delta = 0.0
+        for product, strike in self.VEV_STRIKES.items():
+            pos = state.position.get(product, 0)
+            if pos != 0:
+                d = self.bs_delta(ve_price, float(strike), T_years, sigma)
+                total_delta += pos * d
+        total_delta += state.position.get("VELVETFRUIT_EXTRACT", 0)
+        return total_delta
 
     # ===== MAIN RUN =====
     def run(self, state: TradingState):
@@ -259,13 +311,8 @@ class Trader:
                 last_ts = saved.get("last_ts", -1)
                 prev_sigma = saved.get("sigma", self.FALLBACK_SIGMA)
                 ema = saved.get("ema", {})
-                if "option_sigmas" in saved:
-                    self.option_sigmas = saved["option_sigmas"]
             except Exception:
                 pass
-                
-        if not hasattr(self, 'option_sigmas'):
-            self.option_sigmas = {p: 0.18 for p in self.VEV_STRIKES.keys()}
 
         if 0 < last_ts and state.timestamp < last_ts:
             day += 1
@@ -288,18 +335,20 @@ class Trader:
                         ema[prod] = mid
 
         intraday_frac = state.timestamp / self.TICKS_PER_DAY
-        tte_days = max(0.01, self.TTE_START_DAYS - intraday_frac)
+        tte_days = max(0.01, self.TTE_START_DAYS - day - intraday_frac)
         T_years = tte_days / 252.0
 
-        # ---- UPDATE PER-STRIKE SIGMA ----
-        for product, od_c in state.order_depths.items():
-            if product in self.VEV_STRIKES:
+        sigma = prev_sigma
+        for calib_prod in ["VEV_5300", "VEV_5200"]:
+            if calib_prod in state.order_depths:
+                od_c = state.order_depths[calib_prod]
                 mid_c = self.get_mid(od_c)
                 if mid_c > 1.0:
-                    K = float(self.VEV_STRIKES[product])
+                    K = float(self.VEV_STRIKES[calib_prod])
                     iv = self.implied_vol(ve_mid, K, T_years, mid_c)
                     if 0.05 < iv < 2.0:
-                        self.option_sigmas[product] = 0.05 * iv + 0.95 * self.option_sigmas[product]
+                        sigma = 0.3 * iv + 0.7 * prev_sigma
+                        break
 
         # ---- HYDROGEL PACK (V2 Magic Logic) ----
         if "HYDROGEL_PACK" in state.order_depths:
@@ -326,38 +375,50 @@ class Trader:
             if not od.buy_orders or not od.sell_orders:
                 result[product] = []
                 continue
-            # We only SNIPE mispricings. We do not provide liquidity (Maker) 
-            # because options have high delta and adverse selection risk.
-            option_sigma = self.option_sigmas.get(product, 0.18)
-            self.trade_option_snipe(om, od, strike, ve_mid, T_years, option_sigma)
+
+            if product in self.SKIP_OTM:
+                pass
+            elif product in self.DEEP_ITM:
+                self.trade_deep_itm(om, od, strike, ve_mid, T_years, sigma)
+            elif product in self.MOD_ITM:
+                self.trade_mod_itm(om, od, strike, ve_mid, T_years, sigma)
+            elif product in self.NEAR_ATM:
+                self.trade_atm_snipe(om, od, strike, ve_mid, T_years, sigma)
 
             result[product] = om.orders
 
-        # ---- TRADE VE: DELTA HEDGING ----
+        # ---- TRADE VE: TAKER DELTA HEDGE ONLY ----
         if "VELVETFRUIT_EXTRACT" in state.order_depths:
-            net_delta = self.calc_portfolio_delta(state, ve_mid, T_years, self.option_sigmas)
-            ve_pos = state.position.get("VELVETFRUIT_EXTRACT", 0)
-            
-            hedge_qty = 0
-            if abs(net_delta) > 30:
+            od = state.order_depths["VELVETFRUIT_EXTRACT"]
+            pos = state.position.get("VELVETFRUIT_EXTRACT", 0)
+            om = OrderManager("VELVETFRUIT_EXTRACT", pos, self.LIMITS["VELVETFRUIT_EXTRACT"])
+
+            net_delta = self.calc_portfolio_delta(state, ve_mid, T_years, sigma)
+            if abs(net_delta) > 20:
                 hedge_qty = -int(round(net_delta * 0.5))
+                
                 if hedge_qty > 0:
-                    hedge_qty = min(hedge_qty, 250 - ve_pos)
+                    for ask_p in sorted(od.sell_orders.keys()):
+                        if hedge_qty <= 0: break
+                        take = min(hedge_qty, -od.sell_orders[ask_p])
+                        take_executed = om.add_buy(ask_p, take)
+                        hedge_qty -= take_executed
+                        
                 elif hedge_qty < 0:
-                    hedge_qty = max(hedge_qty, -(ve_pos + 250))
-                    
-            if hedge_qty != 0:
-                od_ve = state.order_depths["VELVETFRUIT_EXTRACT"]
-                result["VELVETFRUIT_EXTRACT"] = self.delta_hedge_orders(od_ve, ve_pos, hedge_qty, 250)
-            else:
-                result["VELVETFRUIT_EXTRACT"] = []
+                    for bid_p in sorted(od.buy_orders.keys(), reverse=True):
+                        if hedge_qty >= 0: break
+                        take = max(hedge_qty, -od.buy_orders[bid_p]) 
+                        take_executed = om.add_sell(bid_p, take)
+                        hedge_qty -= take_executed
+
+            result["VELVETFRUIT_EXTRACT"] = om.orders
 
         conversions = 0
         trader_data = json.dumps({
             "day": day,
             "last_ts": state.timestamp,
-            "ema": ema,
-            "option_sigmas": self.option_sigmas
+            "sigma": sigma,
+            "ema": ema
         })
 
         return result, conversions, trader_data

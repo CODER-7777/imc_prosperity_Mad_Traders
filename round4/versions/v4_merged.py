@@ -1,5 +1,22 @@
+"""
+Round 4 Trader — IMC Prosperity (V3 FINAL)
+============================================
+Merging 537998 (47k PnL) with our counterparty intelligence.
+
+Key learnings from 537998:
+  - Use FULL position limits (no buffer)
+  - Put ENTIRE remaining capacity as passive VEV quotes at ±1 from BS fair
+  - NO delta hedging (it's a net drag)
+  - Simple, clean, fast
+
+Our additions:
+  - Counterparty biasing on HP (Mark 38) and VF (Mark 55/67)
+  - Aggressive book sweep on all VEV levels
+  - Inventory skew for risk management
+"""
+
 from datamodel import OrderDepth, UserId, TradingState, Order
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import jsonpickle
 import math
 
@@ -17,9 +34,6 @@ class Trader:
         "VEV_5100": 5100, "VEV_5200": 5200, "VEV_5300": 5300,
         "VEV_5400": 5400, "VEV_5500": 5500, "VEV_6000": 6000, "VEV_6500": 6500
     }
-
-    # From data analysis: Mark 38 = bad trader on HP
-    BAD_TRADER_HP = "Mark 38"
 
     VEV_SIGMA = 0.17
     TRADING_DAYS = 252
@@ -61,7 +75,7 @@ class Trader:
         max_buy  = limit - pos
         max_sell = limit + pos
 
-        # Aggressive orders first
+        # Aggressive orders first (take liquidity from bad traders)
         if aggress_buy and max_buy > 0:
             for ask_px, ask_vol in sorted(od.sell_orders.items()):
                 if ask_px <= aggress_buy and max_buy > 0:
@@ -125,7 +139,7 @@ class Trader:
         tte_days = max(0.05, self.VEV_TTE_START - (day - 1) - day_fraction)
 
         # ═══════════════════════════════════════════════════════════════════════
-        # 1. HYDROGEL_PACK — proven 537998 logic (no Mark 14, just Mark 38)
+        # 1. HYDROGEL_PACK — with counterparty intelligence
         # ═══════════════════════════════════════════════════════════════════════
         if "HYDROGEL_PACK" in state.order_depths:
             od   = state.order_depths["HYDROGEL_PACK"]
@@ -134,7 +148,10 @@ class Trader:
 
             fair = hp_ema
 
-            net38 = self.bad_trader_net("HYDROGEL_PACK", state.market_trades, self.BAD_TRADER_HP)
+            # Mark 38: bad trader who buys high / sells low — fade him
+            net38 = self.bad_trader_net("HYDROGEL_PACK", state.market_trades, "Mark 38")
+            # Mark 14: buys below mid — fade him too
+            net14 = self.bad_trader_net("HYDROGEL_PACK", state.market_trades, "Mark 14")
 
             aggress_buy_px  = None
             aggress_sell_px = None
@@ -142,11 +159,21 @@ class Trader:
             ask_skew = 0
 
             if net38 < 0:
-                aggress_buy_px = round(fair - 4)
+                aggress_buy_px = round(fair - 2)
                 bid_skew = 3
             elif net38 > 0:
-                aggress_sell_px = round(fair + 4)
+                aggress_sell_px = round(fair + 2)
                 ask_skew = -3
+
+            # Mark 14 bought below mid → mean revert, sell
+            if net14 > 0:
+                if aggress_sell_px is None:
+                    aggress_sell_px = round(fair + 2)
+                ask_skew = max(ask_skew, -2)
+            elif net14 < 0:
+                if aggress_buy_px is None:
+                    aggress_buy_px = round(fair - 2)
+                bid_skew = max(bid_skew, 2)
 
             # Inventory skew
             inv_skew = -int(pos * 0.05)
@@ -163,15 +190,57 @@ class Trader:
             result["HYDROGEL_PACK"] = orders
 
         # ═══════════════════════════════════════════════════════════════════════
-        # 2. VELVETFRUIT_EXTRACT — DON'T trade actively, only update EMA
-        #    VF is used ONLY as the underlying for VEV BS pricing
-        #    Trading VF loses ~10k in hedge drag — not worth it
+        # 2. VELVETFRUIT_EXTRACT — with counterparty intelligence
         # ═══════════════════════════════════════════════════════════════════════
-        # (EMA already updated above — no orders placed for VF)
+        if "VELVETFRUIT_EXTRACT" in state.order_depths:
+            od   = state.order_depths["VELVETFRUIT_EXTRACT"]
+            pos  = state.position.get("VELVETFRUIT_EXTRACT", 0)
+            lim  = self.POS_LIMITS["VELVETFRUIT_EXTRACT"]
+
+            fair = vf_ema
+
+            # Mark 55: bad trader on VF — fade
+            net55 = self.bad_trader_net("VELVETFRUIT_EXTRACT", state.market_trades, "Mark 55")
+            # Mark 67: informed buyer — follow
+            net67 = self.bad_trader_net("VELVETFRUIT_EXTRACT", state.market_trades, "Mark 67")
+
+            aggress_buy_px  = None
+            aggress_sell_px = None
+            bid_skew = 0
+            ask_skew = 0
+
+            if net55 < 0:
+                aggress_buy_px = round(fair - 1)
+                bid_skew = 2
+            elif net55 > 0:
+                aggress_sell_px = round(fair + 1)
+                ask_skew = -2
+
+            # Mark 67 is informed buyer — follow his direction
+            if net67 > 0:
+                if aggress_buy_px is None:
+                    aggress_buy_px = round(fair - 1)
+                bid_skew = max(bid_skew, 2)
+            elif net67 < 0:
+                if aggress_sell_px is None:
+                    aggress_sell_px = round(fair + 1)
+                ask_skew = min(ask_skew, -2)
+
+            inv_skew = -int(pos * 0.03)
+            bid_skew += inv_skew
+            ask_skew += inv_skew
+
+            orders = self.make_orders(
+                "VELVETFRUIT_EXTRACT", od, fair, pos, lim,
+                bid_skew=bid_skew, ask_skew=ask_skew,
+                spread=2,
+                aggress_buy=aggress_buy_px,
+                aggress_sell=aggress_sell_px
+            )
+            result["VELVETFRUIT_EXTRACT"] = orders
 
         # ═══════════════════════════════════════════════════════════════════════
-        # 3. VEV Options — THE PROFIT ENGINE
-        #    BS pricing + FULL CAPACITY passive quotes
+        # 3. VEV Options — BS pricing + FULL CAPACITY passive quotes
         # ═══════════════════════════════════════════════════════════════════════
         vf_price = vf_ema
 
