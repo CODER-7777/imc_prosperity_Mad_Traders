@@ -21,10 +21,14 @@ Thumbs.db
 desktop.ini
 
 # Submission logs (large JSON/log files, keep zips for reference)
+*.log
 round*/Logs/*/
 round*/logs/*/
 !round*/Logs/*.zip
 !round*/logs/*.zip
+
+# Backtester logs
+backtests/
 
 # Analysis scripts and output (development artifacts, not production code)
 round*/analysis/
