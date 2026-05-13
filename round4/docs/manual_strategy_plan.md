@@ -11,7 +11,7 @@ It is critical to follow these exact volumes. The Exchange uses a **uniform clea
 
 ---
 
-## 🟢 DRYLAND FLAX
+##  DRYLAND FLAX
 **Auto-sell Price:** 30 XiRECs (No trading fees)
 
 | Parameter | Value |
@@ -28,7 +28,7 @@ It is critical to follow these exact volumes. The Exchange uses a **uniform clea
 
 ---
 
-## 🟢 EMBER MUSHROOM
+##  EMBER MUSHROOM
 **Auto-sell Price:** 20 XiRECs (Trading fee: 0.10 XiRECs per unit traded)
 
 | Parameter | Value |
@@ -47,4 +47,4 @@ It is critical to follow these exact volumes. The Exchange uses a **uniform clea
 
 ---
 
-### 💰 Total Expected Manual Profit: **~88,000 XiRECs**
+###  Total Expected Manual Profit: **~88,000 XiRECs**

@@ -49,7 +49,7 @@ VELVETFRUIT_EXTRACT : 200
 VELVETFRUIT_EXTRACT_VOUCHER : 300 for each of the 10 vouchers.
 Round 3 - “Gloves Off”
 2
-📃Example: VEV_5000  is an option on the underlying VEV with a strike price
+Example: VEV_5000  is an option on the underlying VEV with a strike price
 of 5000 and a position limit of 300. At the start of the final simulation of
 Round 3, its time to expiry (TTE) is 5 days. In the historical data, the
 corresponding TTE values are:
@@ -67,7 +67,7 @@ ranging between 670 and 920. You trade at most once with each counterparty.
 On the next trading day, you’re able to sell all the product for a fair price, 920.
 The distribution of the bids is uniformly distributed at increments of 5 between 
 670 and 920 (inclusive on both ends). 
-📃Example: counterparties may have reserve prices at 675 and 680, but
+Example: counterparties may have reserve prices at 675 and 680, but
 not at 676, 677, 678, 679, etc..
 You may submit two bids. If the first bid is higher than the reserve price, they
 trade with you at your first bid. If your second bid is higher than the reserve price
