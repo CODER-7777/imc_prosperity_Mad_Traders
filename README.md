@@ -15,13 +15,13 @@ We successfully navigated through the rounds, adapting our strategies to the uni
 
 ### Rankings Summary
 
-| Round | Global Rank / Status | Total PnL | Key Products Traded |
-|:-----:|:--------------------:|:---------:|:--------------------|
-| **1** | *(Add Rank here)* | *(Add PnL)* | Osmium, Pepper Root |
-| **2** | *(Add Rank here)* | *(Add PnL)* | + Market Access optimization |
-| **3** | *(Add Rank here)* | *(Add PnL)* | + Volcanic Rock Vouchers (Options) |
-| **4** | *(Add Rank here)* | 57,916 | + HYDROGEL, VEV options |
-| **5** | Grand Finals | *(Add PnL)* | Full Market |
+| Round | Global Rank / Status |
+|:-----:|:--------------------:|
+| **1** | **1310** |
+| **2** | **713** |
+| **3** | **1080** |
+| **4** | **2731** |
+| **5** | **2610(Final)** |
 
 ---
 
