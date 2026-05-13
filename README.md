@@ -7,7 +7,23 @@ Algorithmic trading competition by IMC Trading (2026).
 
 ---
 
-## 🏆 Final Leaderboard & Achievements
+## Who We Are
+
+We are **Team Mad Traders** — and yes, that's our actual team name.
+
+This was the **first trading competition** we ever participated in, and what a ride it was. We went in with zero competitive trading experience, armed with nothing but curiosity and a willingness to experiment. Over the course of the competition, we wrote **dozens of scripts**, analyzed **countless log files**, iterated on strategies late into the night, and genuinely enjoyed the chaos of figuring things out from scratch.
+
+We were progressing well — climbing the leaderboard steadily through Rounds 1–3. But life had other plans: **end-semester exams** hit right when the competition was heating up, and we simply couldn't dedicate the time needed to give Rounds 4 and 5 our best shot. Our rankings reflect that, but the experience we gained doesn't.
+
+### What We Learned
+
+The single biggest takeaway? **Trading is not a trick.** There's no magic formula for buying low and selling high. The technology, mathematics, and intuition behind algorithmic trading are **deeply comprehensive** — from Black-Scholes pricing to order book dynamics, from counterparty analysis to inventory risk management. Every round taught us something new, and we walked away with a far richer understanding of quantitative finance than any textbook could have given us.
+
+We're proud of how far we got as first-timers, and we're hungry for more.
+
+---
+
+## Final Leaderboard & Achievements
 
 ![Final Leaderboard](final_after_Results/Final_Leaderboard.png)
 
