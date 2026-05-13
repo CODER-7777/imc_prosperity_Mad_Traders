@@ -2,7 +2,7 @@
 
 ![On to the finals](final_after_Results/On%20to%20the%20finals.png)
 
-Algorithmic trading competition by IMC Trading (2025).
+Algorithmic trading competition by IMC Trading (2026).
 **Team:** Mad_Traders | **Language:** Python 3.12 | **Platform:** IMC Prosperity Sandbox
 
 ---
@@ -83,3 +83,9 @@ To maintain a clean and professional workspace, we have organized our developmen
 - **State persistence:** EMA values and day counters serialized via `jsonpickle`.
 - **Position management:** Full limit utilization with inventory skew for risk control.
 - **Execution budget:** Highly optimized native data structures.
+
+---
+
+## Acknowledgements & Credits
+- **Backtester & Logging:** Huge thanks to **Kevin** (`kevin-fu1`) for the logging integrations and visualizer tools that significantly aided our offline testing and strategy tuning.
+- **Offline Engine:** Also acknowledging the foundational open-source backtester work by **jmerle** which heavily inspired our offline testing setup.
