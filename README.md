@@ -7,7 +7,7 @@ Algorithmic trading competition by IMC Trading (2025).
 
 ---
 
-## 🏆 Final Leaderboard & Achievements
+## Final Leaderboard & Achievements
 
 ![Final Leaderboard](final_after_Results/Final_Leaderboard.png)
 
@@ -15,7 +15,7 @@ We successfully navigated through the rounds, adapting our strategies to the uni
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 To maintain a clean and professional workspace, we have organized our development history into separate git branches. The `main` branch acts as our pristine portfolio, containing only our final submitted algorithms and results.
 
@@ -30,7 +30,7 @@ To maintain a clean and professional workspace, we have organized our developmen
 
 ---
 
-## 📈 Round-by-Round Strategies & Performance
+## Round-by-Round Strategies & Performance
 
 ### Round 1
 **Strategy:** Market Making & Trend Exploitation
@@ -68,7 +68,7 @@ To maintain a clean and professional workspace, we have organized our developmen
 
 ---
 
-## ⚙️ Technical Highlights
+## Technical Highlights
 
 | Algorithm | Application | Implementation |
 |-----------|------------|----------------|
