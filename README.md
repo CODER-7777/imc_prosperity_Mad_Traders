@@ -7,11 +7,21 @@ Algorithmic trading competition by IMC Trading (2026).
 
 ---
 
-## Final Leaderboard & Achievements
+## 🏆 Final Leaderboard & Achievements
 
 ![Final Leaderboard](final_after_Results/Final_Leaderboard.png)
 
 We successfully navigated through the rounds, adapting our strategies to the unique mechanics of the IMC Prosperity sandbox.
+
+### Rankings Summary
+
+| Round | Global Rank / Status | Total PnL | Key Products Traded |
+|:-----:|:--------------------:|:---------:|:--------------------|
+| **1** | *(Add Rank here)* | *(Add PnL)* | Osmium, Pepper Root |
+| **2** | *(Add Rank here)* | *(Add PnL)* | + Market Access optimization |
+| **3** | *(Add Rank here)* | *(Add PnL)* | + Volcanic Rock Vouchers (Options) |
+| **4** | *(Add Rank here)* | 57,916 | + HYDROGEL, VEV options |
+| **5** | Grand Finals | *(Add PnL)* | Full Market |
 
 ---
 
